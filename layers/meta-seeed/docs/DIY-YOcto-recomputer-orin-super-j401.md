@@ -1,6 +1,6 @@
 # 在 Yocto/OE4T 中 DIY reComputer Jetson BSP
 
-本文以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 为完整示例，说明如何把一个基于 NVIDIA Linux for Tegra（L4T）的第三方载板 BSP，移植到 Yocto/OE4T 的 `meta-tegra` 构建体系中。
+本文以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 为完整实机案例，说明如何把基于 NVIDIA Linux for Tegra（L4T）的第三方载板 BSP，移植到 Yocto/OE4T 的 `meta-tegra` 构建体系中。本仓库当前已经为本地 Seeed L4T BSP 中的 16 个载板配置建立独立 Yocto machine；Super J401 是其中完成刷写和启动实机验证的参考板。
 
 本文不仅给出最终文件，还解释每类 BSP 文件属于启动链的哪一层、如何从厂商 L4T BSP 提取信息、如何验证生成物，以及如何定位构建和刷写问题。其他 reComputer 或自定义 Jetson 载板可以沿用相同流程。
 
@@ -15,7 +15,7 @@
 
 > 本文示例基于 `meta-tegra` 的 `wrynose` 分支、L4T R39.2.0 / JetPack 7.2。移植其他版本时，必须使用与目标 L4T 版本匹配的 OE4T 分支和 NVIDIA BSP 文件。
 
-> **验证范围说明：** 目前只有 reComputer Super J401 搭配 Jetson Orin NX 16GB（P3767-0000）完成了构建、刷写和启动实机验证。其他 Seeed reComputer/第三方载板可以复用本文的方法论和 layer 组织方式，但不能直接认为同一 machine、DTB 或刷写包一定可用。每款载板和每种 module SKU 都必须重新核对并验证 DTB、BCT、BPMP DTB、ODMDATA/UPHY、存储布局以及厂商 kernel/OOT 驱动差异。
+> **验证范围说明：** 16 个默认 machine 均已完成 BitBake metadata 解析，`tegra234` 与 `tegra264` 板级设备树已完成构建验证，自定义 BCT 文件也已验证进入 tegraflash sysroot；目前只有 reComputer Super J401 搭配 Jetson Orin NX 16GB（P3767-0000）完成刷写、启动和基础外设实机验证。未实机验证的 machine 不能直接视为产品支持。
 
 本地 `Linux_for_Tegra` 中其他 Seeed 板卡的源文件盘点和当前 Yocto 支持状态见：
 
@@ -131,7 +131,7 @@ scripts/seeed/prepare-workspace.sh
 
 1. 同步并以 shallow 模式初始化锁定的 submodule；
 2. 创建 `build-seeed`；
-3. 选择 `recomputer-orin-super-j401` machine；
+3. 默认选择 `recomputer-orin-super-j401` machine，也可通过 `--machine` 选择其他 Seeed machine；
 4. 在用户 cache 目录创建共享 downloads 和 sstate；
 5. 生成独立 cache 配置，不把缓存写进 Git。
 
@@ -160,6 +160,20 @@ sstate:    ~/.cache/yocto-seeed/sstate-cache
 ./scripts/seeed/prepare-workspace.sh --help
 ```
 
+列出当前支持的全部 machine：
+
+```bash
+./scripts/seeed/build.sh machines
+```
+
+为其他载板创建独立工作目录示例：
+
+```bash
+./scripts/seeed/prepare-workspace.sh \
+  --machine recomputer-thor-carrier-j601 \
+  --build-dir build-seeed-thor-j601
+```
+
 ### 0.5 推荐的分阶段编译教程
 
 统一构建入口：
@@ -172,6 +186,14 @@ scripts/seeed/build.sh
 
 ```bash
 ./scripts/seeed/build.sh metadata
+```
+
+其他 machine 使用相同入口，例如：
+
+```bash
+./scripts/seeed/build.sh metadata \
+  --machine recomputer-industrial-orin-j401 \
+  --build-dir build-seeed-industrial-j401
 ```
 
 第二步，只编译 DTB/DTBO：
@@ -204,6 +226,12 @@ scripts/seeed/build.sh
 ./scripts/seeed/build.sh sdk
 ```
 
+一次解析全部 machine，并分别编译 `tegra234`、`tegra264` 设备树族：
+
+```bash
+./scripts/seeed/validate-all-machines.sh
+```
+
 构建脚本支持其他 build 目录：
 
 ```bash
@@ -217,7 +245,7 @@ scripts/seeed/build.sh
 
 ```bash
 ./scripts/seeed/prepare-flash.sh \
-  --output-dir ~/recomputer-super-flash
+  --machine recomputer-orin-super-j401
 ```
 
 脚本会：
@@ -225,14 +253,14 @@ scripts/seeed/build.sh
 - 找到 deploy 中稳定软链接指向的 tegraflash archive；
 - 要求输出目录为空，避免混入旧文件；
 - 解压刷写包；
-- 检查 DTB、BPMP DTB、pinmux、GPIO、pad voltage、rootfs 和入口脚本；
+- 从 `flashvars` 动态读取并检查当前 machine 的 DTB、BPMP DTB、pinmux、pad voltage、rootfs 和入口脚本；
 - 打印 `flashvars` 与 `.env.initrd-flash`；
 - 只输出后续刷写命令，不会自动运行 `sudo`。
 
 准备完成后：
 
 ```bash
-cd ~/recomputer-super-flash
+cd ~/seeed-flash-recomputer-orin-super-j401
 lsusb -d 0955:
 sudo ./initrd-flash
 ```
@@ -249,10 +277,10 @@ sudo ./initrd-flash
     ├── downloads/                  # 可跨 build 复用
     └── sstate-cache/                # 可跨 build 复用
 
-~/recomputer-super-flash/           # 临时刷写目录，刷完可删除
+~/seeed-flash-<machine>/             # 临时刷写目录，刷完可删除
 ```
 
-需要备份或分享时，只推送 Git commit。不要归档 `/data/yocto/build-*` 或 `~/recomputer-super-flash`。
+需要备份或分享时，只推送 Git commit。不要归档 `/data/yocto/build-*` 或 `~/seeed-flash-*`。
 
 ## 目录
 
@@ -379,7 +407,15 @@ Linux_for_Tegra/source/hardware
 
 ## 3. 示例范围和版本矩阵
 
-本示例使用：
+仓库中的 `meta-seeed` 当前覆盖三类 SoC/模块平台：
+
+| 平台 | machine 数量 | 构建状态 | 实机状态 |
+| --- | ---: | --- | --- |
+| Jetson Orin NX/Nano | 8 | metadata、DTB/BCT 构建验证 | Super J401 已实机验证，其余未实机验证 |
+| Jetson AGX Orin | 5 | metadata、DTB/BCT 构建验证 | 未实机验证 |
+| Jetson Thor | 3 | metadata、DTB/BCT 构建验证 | 未实机验证 |
+
+完整 machine/config 对照见 `layers/meta-seeed/docs/board-support-status.md`。本文后续代码仍以以下实机案例展开：
 
 ```text
 Carrier:  Seeed reComputer Super J401
@@ -437,7 +473,7 @@ recomputer-super-orin-nano-4gb.conf
 
 ## 4. 创建自定义 layer
 
-示例 layer 结构如下：
+当前多板 layer 的主要结构如下。为避免目录树过长，DT/BCT 文件只展示代表项：
 
 ```text
 layers/meta-seeed/
@@ -446,24 +482,33 @@ layers/meta-seeed/
 ├── conf/
 │   ├── layer.conf
 │   └── machine/
-│       └── recomputer-orin-super-j401.conf
+│       ├── include/
+│       │   ├── seeed-agx-orin.inc
+│       │   ├── seeed-orin-j401.inc
+│       │   └── seeed-thor.inc
+│       ├── recomputer-orin-super-j401.conf
+│       ├── recomputer-industrial-orin-j401.conf
+│       ├── recomputer-mini-agx-orin-j501x.conf
+│       ├── recomputer-thor-carrier-j601.conf
+│       └── ...                         # 共 16 个 machine
 ├── docs/
-│   └── recomputer-orin-super-j401.md
+│   ├── DIY-YOcto-recomputer-orin-super-j401.md
+│   └── board-support-status.md
 └── recipes-bsp/
     ├── seeed-devicetree/
     │   ├── seeed-devicetree_1.0.bb
     │   └── seeed-devicetree/
-    │       ├── tegra234-j401-p3768-0000+p3767-0000-recomputer-super.dts
-    │       ├── tegra234-j401-p3768-0000+p3767-recomputer-super-common.dts
-    │       ├── tegra234-super-j401-p3768-0000+p3767-0000.dts
-    │       ├── tegra234-p3768-0000+p3767-xxxx-nv-common.dtsi
-    │       └── tegra234-p3767-camera-p3768-imx219-quad-seeed.dts
+    │       ├── tegra234-...-recomputer*.dts
+    │       ├── tegra234-...-reserver*.dts
+    │       ├── tegra264-...-recomputer-carrier.dts
+    │       └── gmsl/
     └── tegra-binaries/
         ├── tegra-bootfiles_39.2.0.bbappend
         └── tegra-bootfiles/
-            ├── recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi
-            ├── recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi
-            └── recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi
+            ├── recomputer-*-pinmux*.dts*
+            ├── recomputer-*-padvoltage*.dts*
+            ├── reserver-*-pinmux*.dtsi
+            └── seeed-agx-orin-kit-*.dtsi
 ```
 
 `conf/layer.conf` 至少需要注册 layer 和兼容分支：
@@ -1301,9 +1346,9 @@ recipes-core/images/<product>-image.bb
 - camera pipeline 测试；
 - OTA/回滚测试。
 
-## 16. 复制本示例到另一款 reComputer 的步骤
+## 16. 将通用框架扩展到新的 Seeed 或第三方载板
 
-本章描述的是**移植流程复用**，不是“一个 BSP 通刷所有 Seeed 载板”。通常可以复用：
+本仓库已经为当前 L4T BSP 中的 16 个 Seeed config 建立默认 machine。本章适用于新增 module SKU、载板 revision，或继续接入 L4T 树中尚未出现的新载板；它描述的是**移植流程复用**，不是“一个 BSP 通刷所有载板”。通常可以复用：
 
 - `meta-seeed` 的 layer 目录组织；
 - 从 L4T config 提取变量的方法；
@@ -1323,7 +1368,13 @@ recipes-core/images/<product>-image.bb
 - NVMe/eMMC/QSPI storage layout；
 - 特定载板驱动 patch。
 
-因此，其他载板的合理目标是“沿用相同流程创建新的 machine 和板级文件”，而不是只修改 machine 名称后直接构建。
+开始新增移植前，先确认仓库中是否已有对应 machine：
+
+```bash
+./scripts/seeed/build.sh machines
+```
+
+如果已经存在，应优先验证或扩展该 machine，而不是重复创建。对于真正的新载板，合理目标是“沿用相同流程创建新的 machine 和板级文件”，而不是只修改 machine 名称后直接构建。
 
 可以按以下顺序执行：
 
@@ -1375,10 +1426,11 @@ meta-<vendor>/
 
 ## 18. 当前示例的已知边界
 
-- 当前 machine 静态针对 P3767-0000 / Orin NX 16GB；
-- 其他 module SKU 应拆分为独立 machine；
-- 已完成板级 DT/BCT 和基础刷写验证；
-- 部分 Seeed camera/GMSL 驱动差异尚未移植；
+- 当前 16 个 machine 对应各 Seeed L4T config 的默认 module/SKU 组合；动态 EEPROM SKU 分支尚未全部拆分为独立 Yocto machine；
+- 16 个 machine 已完成 metadata 解析，`tegra234`/`tegra264` DT 构建以及 BCT 安装验证；
+- 只有 reComputer Super J401 + Orin NX 16GB 完成刷写、启动和基础外设实机验证；
+- 本地 L4T 的双 IMX219 overlay 缺少 `tegra234-camera-rbpcv2-imx219.dtsi`，受影响 machine 暂不声明该 overlay 可构建；
+- camera/GMSL、工业 I/O、网络、存储和电源模式仍需按具体硬件执行回归测试；
 - `demo-image-full` 是演示镜像，不是最终产品镜像；
 - 默认 root 空密码仅用于开发；
 - 未在本文中完成 Secure Boot、量产密钥和完整 OTA 验证。

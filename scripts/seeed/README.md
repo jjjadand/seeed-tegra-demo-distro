@@ -10,11 +10,15 @@ These helpers support all Seeed machines in
 ./scripts/seeed/build.sh dtb --machine recomputer-mini-agx-orin-j501x
 ./scripts/seeed/build.sh bootfiles --machine recomputer-thor-carrier-j601
 ./scripts/seeed/validate-all-machines.sh
+./scripts/seeed/prepare-flash.sh --machine recomputer-thor-carrier-j601
 ```
 
 The validation script parses all 16 machines and compiles one complete DT set
 for each SoC family (`tegra234` and `tegra264`). It does not claim physical
 flash or peripheral validation.
+
+Use a separate build directory per machine when switching targets, for example
+`build-seeed-industrial-j401` and `build-seeed-thor-j601`.
 
 The remaining workspace and flash helpers still accept their documented
 machine, build, cache, image, and extraction options.

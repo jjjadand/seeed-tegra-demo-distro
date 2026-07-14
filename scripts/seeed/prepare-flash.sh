@@ -8,7 +8,7 @@ REPO_ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 BUILD_DIR=${BUILD_DIR:-build-seeed}
 MACHINE=${MACHINE:-recomputer-orin-super-j401}
 IMAGE=${IMAGE:-demo-image-full}
-OUTPUT_DIR=${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE}
+OUTPUT_DIR=${OUTPUT_DIR:-}
 ARCHIVE=
 
 usage() {
@@ -20,7 +20,7 @@ directory. This script does not run sudo or flash the target.
 
 Options:
   --archive FILE    Explicit .tegraflash-tar.zst archive
-  --output-dir DIR  Extraction directory (default: $OUTPUT_DIR)
+  --output-dir DIR  Extraction directory (default: ${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE})
   --build-dir DIR   Build directory (default: $BUILD_DIR)
   --machine NAME    Machine name (default: $MACHINE)
   --image NAME      Image name (default: $IMAGE)
@@ -61,6 +61,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+OUTPUT_DIR=${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE}
 
 if [[ $BUILD_DIR != /* ]]; then
     BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
