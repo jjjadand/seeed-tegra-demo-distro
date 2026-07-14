@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 
-BUILD_DIR=${BUILD_DIR:-build-seeed}
-MACHINE=${MACHINE:-recomputer-orin-super-j401}
+BUILD_DIR=${BUILD_DIR:-}
+EXPECTED_MACHINE=${MACHINE:-}
 IMAGE=${IMAGE:-demo-image-full}
 OUTPUT_DIR=${OUTPUT_DIR:-}
 ARCHIVE=
@@ -20,9 +20,9 @@ directory. This script does not run sudo or flash the target.
 
 Options:
   --archive FILE    Explicit .tegraflash-tar.zst archive
-  --output-dir DIR  Extraction directory (default: ${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE})
-  --build-dir DIR   Build directory (default: $BUILD_DIR)
-  --machine NAME    Machine name (default: $MACHINE)
+  --output-dir DIR  Extraction directory (default: ~/seeed-flash-MACHINE)
+  --build-dir DIR   Temporarily use this prepared build directory
+  --machine NAME    Verify that the prepared build uses this MACHINE
   --image NAME      Image name (default: $IMAGE)
   -h, --help        Show this help
 EOF
@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --machine)
-            MACHINE=$2
+            EXPECTED_MACHINE=$2
             shift 2
             ;;
         --image)
@@ -62,11 +62,42 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-OUTPUT_DIR=${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE}
+if [[ -z $BUILD_DIR ]]; then
+    active_file=$(git -C "$REPO_ROOT" rev-parse --git-path seeed-active-build)
+    if [[ $active_file != /* ]]; then
+        active_file="$REPO_ROOT/$active_file"
+    fi
+    if [[ -s $active_file ]]; then
+        BUILD_DIR=$(<"$active_file")
+    else
+        BUILD_DIR=build-seeed
+    fi
+fi
 
 if [[ $BUILD_DIR != /* ]]; then
     BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
 fi
+BUILD_DIR=$(readlink -m "$BUILD_DIR")
+
+local_conf="$BUILD_DIR/conf/local.conf"
+if [[ ! -f $local_conf ]]; then
+    echo "ERROR: $BUILD_DIR is not a prepared Yocto build directory." >&2
+    exit 1
+fi
+
+MACHINE=$(awk -F'"' \
+    '/^[[:space:]]*MACHINE[[:space:]]*(\?|\+|:)?=/{print $2; exit}' \
+    "$local_conf")
+if [[ -z $MACHINE ]]; then
+    echo "ERROR: cannot determine MACHINE from $local_conf" >&2
+    exit 1
+fi
+if [[ -n $EXPECTED_MACHINE && $EXPECTED_MACHINE != "$MACHINE" ]]; then
+    echo "ERROR: build directory is configured for $MACHINE, not $EXPECTED_MACHINE" >&2
+    exit 1
+fi
+
+OUTPUT_DIR=${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE}
 
 if [[ -z $ARCHIVE ]]; then
     ARCHIVE="$BUILD_DIR/tmp/deploy/images/$MACHINE/$IMAGE-$MACHINE.rootfs.tegraflash-tar.zst"

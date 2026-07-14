@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 
-MACHINE=${MACHINE:-recomputer-orin-super-j401}
-BUILD_DIR=${BUILD_DIR:-build-seeed}
+EXPECTED_MACHINE=${MACHINE:-}
+BUILD_DIR=${BUILD_DIR:-}
 IMAGE=${IMAGE:-demo-image-full}
 
 usage() {
@@ -15,6 +15,7 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   machines       List all Seeed MACHINE names
+  current        Show the active build directory and configured MACHINE
   metadata       Parse metadata and print the key BSP selections
   dtb            Compile the Seeed DTB/DTBO provider
   bootfiles      Install and verify custom BCT/pinmux files
@@ -24,8 +25,8 @@ Commands:
   clean          Clean the image recipe work directory
 
 Options:
-  --build-dir DIR  Build directory (default: $BUILD_DIR)
-  --machine NAME   Yocto MACHINE (default: $MACHINE)
+  --build-dir DIR  Temporarily use this prepared build directory
+  --machine NAME   Verify that the prepared build uses this MACHINE
   --image NAME     Image recipe (default: $IMAGE)
   -h, --help       Show this help
 EOF
@@ -50,7 +51,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --machine)
-            MACHINE=$2
+            EXPECTED_MACHINE=$2
             shift 2
             ;;
         --image)
@@ -70,7 +71,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$action" in
-    machines|metadata|dtb|bootfiles|image|flash-package|sdk|clean)
+    machines|current|metadata|dtb|bootfiles|image|flash-package|sdk|clean)
         ;;
     *)
         echo "Unknown command: $action" >&2
@@ -85,25 +86,64 @@ if [[ $action == machines ]]; then
     exit 0
 fi
 
-if [[ $BUILD_DIR != /* ]]; then
-    BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
-fi
-
-if [[ -f $BUILD_DIR/conf/local.conf ]]; then
-    configured_machine=$(awk -F'"' \
-        '/^[[:space:]]*MACHINE[[:space:]]*(\?|\+|:)?=/{print $2; exit}' \
-        "$BUILD_DIR/conf/local.conf")
-    if [[ -n $configured_machine && $configured_machine != "$MACHINE" ]]; then
-        echo "ERROR: build directory is configured for $configured_machine, not $MACHINE" >&2
-        echo "Use a separate --build-dir for each machine." >&2
-        exit 1
+if [[ -z $BUILD_DIR ]]; then
+    active_file=$(git -C "$REPO_ROOT" rev-parse --git-path seeed-active-build)
+    if [[ $active_file != /* ]]; then
+        active_file="$REPO_ROOT/$active_file"
+    fi
+    if [[ -s $active_file ]]; then
+        BUILD_DIR=$(<"$active_file")
+    else
+        BUILD_DIR=build-seeed
     fi
 fi
 
+if [[ $BUILD_DIR != /* ]]; then
+    BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
+fi
+BUILD_DIR=$(readlink -m "$BUILD_DIR")
+
+local_conf="$BUILD_DIR/conf/local.conf"
+if [[ ! -f $local_conf ]]; then
+    cat >&2 <<EOF
+ERROR: $BUILD_DIR is not a prepared Yocto build directory.
+
+Run scripts/seeed/prepare-workspace.sh with --machine and --build-dir first.
+EOF
+    exit 1
+fi
+
+configured_machine=$(sed -n 's/^[[:space:]]*MACHINE[[:space:]]*?=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$local_conf" | head -n 1)
+if [[ -z $configured_machine ]]; then
+    echo "ERROR: cannot determine MACHINE from $local_conf" >&2
+    exit 1
+fi
+if [[ -n $EXPECTED_MACHINE && $EXPECTED_MACHINE != "$configured_machine" ]]; then
+    cat >&2 <<EOF
+ERROR: requested MACHINE does not match the prepared build directory.
+  Build dir:  $BUILD_DIR
+  Configured: $configured_machine
+  Requested:  $EXPECTED_MACHINE
+EOF
+    exit 1
+fi
+
+if [[ $action == current ]]; then
+    echo "Build dir: $BUILD_DIR"
+    echo "Machine:   $configured_machine"
+    sed -n 's/^[[:space:]]*\(DL_DIR\|SSTATE_DIR\)[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1: \2/p' \
+        "$BUILD_DIR/conf/seeed-cache.conf" 2>/dev/null || true
+    exit 0
+fi
+
+echo "==> Seeed build: $configured_machine ($BUILD_DIR)"
+
 cd "$REPO_ROOT"
+unset MACHINE
 # shellcheck disable=SC1091
 set +u
-. ./setup-env --machine "$MACHINE" "$BUILD_DIR"
+. ./setup-env "$BUILD_DIR"
 set -u
 
 case "$action" in

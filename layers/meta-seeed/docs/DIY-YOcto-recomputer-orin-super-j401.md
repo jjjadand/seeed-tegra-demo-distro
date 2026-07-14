@@ -133,7 +133,8 @@ scripts/seeed/prepare-workspace.sh
 2. 创建 `build-seeed`；
 3. 默认选择 `recomputer-orin-super-j401` machine，也可通过 `--machine` 选择其他 Seeed machine；
 4. 在用户 cache 目录创建共享 downloads 和 sstate；
-5. 生成独立 cache 配置，不把缓存写进 Git。
+5. 生成独立 cache 配置，不把缓存写进 Git；
+6. 将本次 build 目录记录为当前 checkout 的活动工作区。
 
 默认目录：
 
@@ -174,6 +175,14 @@ sstate:    ~/.cache/yocto-seeed/sstate-cache
   --build-dir build-seeed-thor-j601
 ```
 
+`--machine` 只在这次 prepare 命令中生效，不会导出到当前 shell，也不会修改全局环境。载板信息会固化在该 build 目录的 `conf/local.conf` 中；每个载板必须使用独立 build 目录。
+
+prepare 完成后，后续构建命令自动使用最近激活的 build 目录，不需要重复传入载板参数。可随时确认当前选择：
+
+```bash
+./scripts/seeed/build.sh current
+```
+
 ### 0.5 推荐的分阶段编译教程
 
 统一构建入口：
@@ -182,18 +191,17 @@ sstate:    ~/.cache/yocto-seeed/sstate-cache
 scripts/seeed/build.sh
 ```
 
-对于非默认载板，建议先在当前 shell 中固定目标 machine 和专用 build 目录。后续所有 `build.sh` 命令都会继承这两个环境变量：
+对于非默认载板，先用一次 prepare 命令固定目标 machine 和专用 build 目录：
 
 ```bash
-export MACHINE=recomputer-industrial-orin-j401
-export BUILD_DIR=build-seeed-industrial-j401
-
 ./scripts/seeed/prepare-workspace.sh \
-  --machine "$MACHINE" \
-  --build-dir "$BUILD_DIR"
+  --machine recomputer-industrial-orin-j401 \
+  --build-dir build-seeed-industrial-j401
 ```
 
-> 不要让两个不同 machine 共用同一个 build 目录。切换载板时应更换 `BUILD_DIR`，否则已有 `conf/local.conf`、machine override 和构建缓存可能与目标载板不一致。
+prepare 会把这个 build 目录激活。后续的 `metadata`、`dtb`、`bootfiles`、`image`、`flash-package`、`sdk` 和 `prepare-flash.sh` 都自动读取其中固化的 `recomputer-industrial-orin-j401`，无需再次传入载板参数。
+
+> 不要让两个不同 machine 共用同一个 build 目录。切换载板时应重新运行 prepare 并更换 `--build-dir`，否则已有 `conf/local.conf` 和构建产物会与目标载板不一致。
 
 第一步，检查 layer、recipe 和最终变量：
 
@@ -239,22 +247,21 @@ export BUILD_DIR=build-seeed-industrial-j401
 
 `validate-all-machines.sh` 是矩阵构建检查，内部会遍历全部 machine，因此不需要指定单一载板参数。它不能代替各载板的完整 image 构建和实机刷写验证。
 
-如果不使用 `export`，则每条命令都必须显式传入相同参数，例如：
+如需临时操作另一个已经 prepare 的 build 目录，可只对当前命令指定：
 
 ```bash
 ./scripts/seeed/build.sh image \
-  --machine recomputer-industrial-orin-j401 \
-  --build-dir build-seeed-industrial-j401
+  --build-dir /data/yocto/build-seeed-industrial-j401
 ```
+
+这个临时参数不会改变活动工作区。`build.sh --machine` 仅用于校验 build 目录的 machine，不能把一个已有 build 目录临时切换成另一块载板，以避免混用构建产物。
 
 ### 0.6 校验并解压刷写包
 
 不要在 deploy 目录中直接解压，也不要把刷写目录放在 USB 移动硬盘上。使用：
 
 ```bash
-./scripts/seeed/prepare-flash.sh \
-  --machine "$MACHINE" \
-  --build-dir "$BUILD_DIR"
+./scripts/seeed/prepare-flash.sh
 ```
 
 脚本会：
