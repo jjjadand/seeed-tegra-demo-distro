@@ -182,18 +182,23 @@ sstate:    ~/.cache/yocto-seeed/sstate-cache
 scripts/seeed/build.sh
 ```
 
+对于非默认载板，建议先在当前 shell 中固定目标 machine 和专用 build 目录。后续所有 `build.sh` 命令都会继承这两个环境变量：
+
+```bash
+export MACHINE=recomputer-industrial-orin-j401
+export BUILD_DIR=build-seeed-industrial-j401
+
+./scripts/seeed/prepare-workspace.sh \
+  --machine "$MACHINE" \
+  --build-dir "$BUILD_DIR"
+```
+
+> 不要让两个不同 machine 共用同一个 build 目录。切换载板时应更换 `BUILD_DIR`，否则已有 `conf/local.conf`、machine override 和构建缓存可能与目标载板不一致。
+
 第一步，检查 layer、recipe 和最终变量：
 
 ```bash
 ./scripts/seeed/build.sh metadata
-```
-
-其他 machine 使用相同入口，例如：
-
-```bash
-./scripts/seeed/build.sh metadata \
-  --machine recomputer-industrial-orin-j401 \
-  --build-dir build-seeed-industrial-j401
 ```
 
 第二步，只编译 DTB/DTBO：
@@ -232,11 +237,14 @@ scripts/seeed/build.sh
 ./scripts/seeed/validate-all-machines.sh
 ```
 
-构建脚本支持其他 build 目录：
+`validate-all-machines.sh` 是矩阵构建检查，内部会遍历全部 machine，因此不需要指定单一载板参数。它不能代替各载板的完整 image 构建和实机刷写验证。
+
+如果不使用 `export`，则每条命令都必须显式传入相同参数，例如：
 
 ```bash
 ./scripts/seeed/build.sh image \
-  --build-dir /data/yocto/build-seeed
+  --machine recomputer-industrial-orin-j401 \
+  --build-dir build-seeed-industrial-j401
 ```
 
 ### 0.6 校验并解压刷写包
@@ -245,7 +253,8 @@ scripts/seeed/build.sh
 
 ```bash
 ./scripts/seeed/prepare-flash.sh \
-  --machine recomputer-orin-super-j401
+  --machine "$MACHINE" \
+  --build-dir "$BUILD_DIR"
 ```
 
 脚本会：

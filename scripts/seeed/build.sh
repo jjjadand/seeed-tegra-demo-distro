@@ -89,6 +89,17 @@ if [[ $BUILD_DIR != /* ]]; then
     BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
 fi
 
+if [[ -f $BUILD_DIR/conf/local.conf ]]; then
+    configured_machine=$(awk -F'"' \
+        '/^[[:space:]]*MACHINE[[:space:]]*(\?|\+|:)?=/{print $2; exit}' \
+        "$BUILD_DIR/conf/local.conf")
+    if [[ -n $configured_machine && $configured_machine != "$MACHINE" ]]; then
+        echo "ERROR: build directory is configured for $configured_machine, not $MACHINE" >&2
+        echo "Use a separate --build-dir for each machine." >&2
+        exit 1
+    fi
+fi
+
 cd "$REPO_ROOT"
 # shellcheck disable=SC1091
 set +u

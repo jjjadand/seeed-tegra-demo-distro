@@ -66,7 +66,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-for command in git bash sed readlink; do
+for command in git bash awk sed readlink; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "ERROR: required command not found: $command" >&2
         exit 1
@@ -95,6 +95,17 @@ if [[ $BUILD_DIR != /* ]]; then
     BUILD_DIR="$REPO_ROOT/$BUILD_DIR"
 fi
 BUILD_DIR=$(readlink -m "$BUILD_DIR")
+
+if [[ -f $BUILD_DIR/conf/local.conf ]]; then
+    configured_machine=$(awk -F'"' \
+        '/^[[:space:]]*MACHINE[[:space:]]*(\?|\+|:)?=/{print $2; exit}' \
+        "$BUILD_DIR/conf/local.conf")
+    if [[ -n $configured_machine && $configured_machine != "$MACHINE" ]]; then
+        echo "ERROR: build directory is configured for $configured_machine, not $MACHINE" >&2
+        echo "Use a separate --build-dir for each machine." >&2
+        exit 1
+    fi
+fi
 
 echo "==> Creating/updating build configuration"
 (

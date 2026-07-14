@@ -6,19 +6,26 @@ These helpers support all Seeed machines in
 
 ```bash
 ./scripts/seeed/build.sh machines
-./scripts/seeed/build.sh metadata --machine recomputer-industrial-orin-j401
-./scripts/seeed/build.sh dtb --machine recomputer-mini-agx-orin-j501x
-./scripts/seeed/build.sh bootfiles --machine recomputer-thor-carrier-j601
+
+export MACHINE=recomputer-industrial-orin-j401
+export BUILD_DIR=build-seeed-industrial-j401
+
+./scripts/seeed/prepare-workspace.sh --machine "$MACHINE" --build-dir "$BUILD_DIR"
+./scripts/seeed/build.sh metadata
+./scripts/seeed/build.sh dtb
+./scripts/seeed/build.sh bootfiles
+./scripts/seeed/build.sh image
+./scripts/seeed/prepare-flash.sh
+
 ./scripts/seeed/validate-all-machines.sh
-./scripts/seeed/prepare-flash.sh --machine recomputer-thor-carrier-j601
 ```
 
 The validation script parses all 16 machines and compiles one complete DT set
 for each SoC family (`tegra234` and `tegra264`). It does not claim physical
 flash or peripheral validation.
 
-Use a separate build directory per machine when switching targets, for example
-`build-seeed-industrial-j401` and `build-seeed-thor-j601`.
+Use a separate build directory per machine when switching targets. Do not reuse
+an existing build directory for a different `MACHINE`.
 
 The remaining workspace and flash helpers still accept their documented
 machine, build, cache, image, and extraction options.
