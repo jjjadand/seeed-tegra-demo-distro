@@ -1,15 +1,13 @@
-FILESEXTRAPATHS:prepend := "${THISDIR}/${BPN}:"
+FILESEXTRAPATHS:prepend := "${THISDIR}/tegra-bootfiles:"
 
-SRC_URI:append:recomputer-orin-super-j401 = " \
-    file://recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi \
-    file://recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi \
-    file://recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi \
+SRC_URI:append = " \
+    ${@' '.join('file://' + f for f in sorted(os.listdir(d.getVar('SEEED_LAYERDIR') + '/recipes-bsp/tegra-binaries/tegra-bootfiles')))} \
 "
 
-SEEED_BOOTFILES_DIR := "${THISDIR}/${BPN}"
-
-do_install:append:recomputer-orin-super-j401() {
-    install -m 0644 ${SEEED_BOOTFILES_DIR}/recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi ${D}${datadir}/tegraflash/
-    install -m 0644 ${SEEED_BOOTFILES_DIR}/recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi ${D}${datadir}/tegraflash/
-    install -m 0644 ${SEEED_BOOTFILES_DIR}/recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi ${D}${datadir}/tegraflash/
+do_install:append() {
+    for file in ${SEEED_LAYERDIR}/recipes-bsp/tegra-binaries/tegra-bootfiles/*.dts \
+                ${SEEED_LAYERDIR}/recipes-bsp/tegra-binaries/tegra-bootfiles/*.dtsi; do
+        [ -f "$file" ] || continue
+        install -m 0644 "$file" ${D}${datadir}/tegraflash/
+    done
 }

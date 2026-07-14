@@ -1,11 +1,7 @@
-SEEED_RECOMPUTER_SUPER_BCT_FILES = " \
-    recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi \
-    recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi \
-    recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi \
-"
+SEEED_TEGRAFLASH_FILES = "${@' '.join(sorted(os.listdir(d.getVar('SEEED_LAYERDIR') + '/recipes-bsp/tegra-binaries/tegra-bootfiles')))}"
 
 tegraflash_custom_pre() {
-    for bctfile in ${SEEED_RECOMPUTER_SUPER_BCT_FILES}; do
-        cp "${STAGING_DATADIR}/tegraflash/$bctfile" .
+    for bctfile in ${SEEED_TEGRAFLASH_FILES}; do
+        [ -f "${STAGING_DATADIR}/tegraflash/$bctfile" ] && cp "${STAGING_DATADIR}/tegraflash/$bctfile" .
     done
 }

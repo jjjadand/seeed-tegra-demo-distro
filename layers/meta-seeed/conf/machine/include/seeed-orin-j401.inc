@@ -1,0 +1,10 @@
+PREFERRED_PROVIDER_virtual/dtb = "seeed-devicetree"
+IMAGE_CLASSES:append = " seeed-recomputer-super-tegraflash"
+
+TEGRA_FLASHVAR_ODMDATA ?= "gbe-uphy-config-9,hsstp-lane-map-3,hsio-uphy-config-0"
+TEGRA_FLASHVAR_PINMUX_CONFIG = "${SEEED_PINMUX_CONFIG}"
+TEGRA_FLASHVAR_PMC_CONFIG = "${SEEED_PMC_CONFIG}"
+KERNEL_DEVICETREE = "${SEEED_DTB}"
+
+TEGRA_PLUGIN_MANAGER_OVERLAYS:append = " ${SEEED_OVERLAYS}"
+TEGRA_FLASHVAR_DCE_OVERLAY = "${SEEED_DCE_OVERLAY}"

@@ -14,6 +14,7 @@ usage() {
 Usage: $(basename "$0") <command> [options]
 
 Commands:
+  machines       List all Seeed MACHINE names
   metadata       Parse metadata and print the key BSP selections
   dtb            Compile the Seeed DTB/DTBO provider
   bootfiles      Install and verify custom BCT/pinmux files
@@ -69,7 +70,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$action" in
-    metadata|dtb|bootfiles|image|flash-package|sdk|clean)
+    machines|metadata|dtb|bootfiles|image|flash-package|sdk|clean)
         ;;
     *)
         echo "Unknown command: $action" >&2
@@ -89,6 +90,10 @@ set +u
 set -u
 
 case "$action" in
+    machines)
+        find "$REPO_ROOT/layers/meta-seeed/conf/machine" -maxdepth 1 -name '*.conf' \
+            -printf '%f\n' | sed 's/\.conf$//' | sort
+        ;;
     metadata)
         bitbake-layers show-layers
         bitbake-layers show-recipes seeed-devicetree
@@ -101,10 +106,10 @@ case "$action" in
     bootfiles)
         bitbake -f -c install tegra-bootfiles
         workdir=$(bitbake -e tegra-bootfiles | sed -n 's/^WORKDIR="\(.*\)"$/\1/p')
-        for file in \
-            recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi \
-            recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi \
-            recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi; do
+        mapfile -t files < <(bitbake -e tegra-bootfiles | sed -n \
+            's/^TEGRA_FLASHVAR_\(PINMUX_CONFIG\|PMC_CONFIG\)="\(.*\)"$/\2/p')
+        for file in "${files[@]}"; do
+            [[ -n $file ]] || continue
             test -s "$workdir/image/usr/share/tegraflash/$file" || {
                 echo "ERROR: tegra-bootfiles did not install $file" >&2
                 exit 1
