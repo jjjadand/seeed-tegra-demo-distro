@@ -1,6 +1,8 @@
-# 在 Yocto/OE4T 中 DIY reComputer Jetson BSP
+# Seeed Jetson 第三方载板 Yocto/OE4T 构建、验证与刷写教程
 
-本文以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 为完整实机案例，说明如何把基于 NVIDIA Linux for Tegra（L4T）的第三方载板 BSP，移植到 Yocto/OE4T 的 `meta-tegra` 构建体系中。本仓库当前已经为本地 Seeed L4T BSP 中的 16 个载板配置建立独立 Yocto machine；Super J401 是其中完成刷写和启动实机验证的参考板。
+本文用于实际验证本仓库支持的全部 Seeed Jetson 第三方载板。仓库已经为本地 Seeed Linux for Tegra（L4T）BSP 中的 16 个载板配置建立独立 Yocto machine；每块载板使用独立 build 目录，但共享 downloads 和 sstate 缓存。**第 0 章是建议逐条执行的验证教程**，后续章节用于解释移植原理和排查问题。
+
+本文仍以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 记录已完成的实机结果；验证其他载板时，必须使用对应 machine，且应标记为“构建验证/未实机验证”，直到完成真实刷写和外设验收。
 
 本文不仅给出最终文件，还解释每类 BSP 文件属于启动链的哪一层、如何从厂商 L4T BSP 提取信息、如何验证生成物，以及如何定位构建和刷写问题。其他 reComputer 或自定义 Jetson 载板可以沿用相同流程。
 
@@ -26,8 +28,10 @@ layers/meta-seeed/docs/board-support-status.md
 也可以生成详细的 L4T 配置清单：
 
 ```bash
+L4T_DIR=/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra
+
 ./scripts/seeed/discover-l4t-boards.sh \
-  --l4t-dir ../Linux_for_Tegra \
+  --l4t-dir "$L4T_DIR" \
   > /tmp/seeed-l4t-board-inventory.md
 ```
 
@@ -104,199 +108,205 @@ mkdir -p ~/work/jetson-yocto
 cd ~/work/jetson-yocto
 
 git clone \
-  --branch wrynose \
+  --branch master \
   --single-branch \
-  https://github.com/jjjadand/tegra-demo-distro.git
+  https://github.com/jjjadand/seeed-tegra-demo-distro.git \
+  tegra-demo-distro
 
 cd tegra-demo-distro
 ```
 
 主仓库只保存 metadata。大型 OE4T/OpenEmbedded 源码由 Git submodule 按锁定 commit 获取，构建产物不会进入 Git。
 
-### 0.4 一键准备 submodule、build 目录和共享缓存
+### 0.4 选择要验证的载板
 
-仓库提供：
-
-```text
-scripts/seeed/prepare-workspace.sh
-```
-
-默认执行：
-
-```bash
-./scripts/seeed/prepare-workspace.sh
-```
-
-它会：
-
-1. 同步并以 shallow 模式初始化锁定的 submodule；
-2. 创建 `build-seeed`；
-3. 默认选择 `recomputer-orin-super-j401` machine，也可通过 `--machine` 选择其他 Seeed machine；
-4. 在用户 cache 目录创建共享 downloads 和 sstate；
-5. 生成独立 cache 配置，不把缓存写进 Git；
-6. 将本次 build 目录记录为当前 checkout 的活动工作区。
-
-默认目录：
-
-```text
-source:    当前 Git checkout
-build:     ./build-seeed
-downloads: ~/.cache/yocto-seeed/downloads
-sstate:    ~/.cache/yocto-seeed/sstate-cache
-```
-
-如果有大容量本地 SSD，可以指定缓存位置：
-
-```bash
-./scripts/seeed/prepare-workspace.sh \
-  --build-dir /data/yocto/build-seeed \
-  --cache-dir /data/yocto/cache
-```
-
-以后即使删除 build 目录，downloads 和 sstate 仍然可以复用。
-
-查看全部选项：
-
-```bash
-./scripts/seeed/prepare-workspace.sh --help
-```
-
-列出当前支持的全部 machine：
+先列出仓库中的全部 Seeed machine：
 
 ```bash
 ./scripts/seeed/build.sh machines
 ```
 
-为其他载板创建独立工作目录示例：
+完整 machine、Seeed L4T config、SoC 和验证状态见：
+
+```text
+layers/meta-seeed/docs/board-support-status.md
+```
+
+下面以 `recomputer-industrial-orin-j401` 为例。验证其他载板时，只替换下一节 prepare 命令中的 `--machine` 和 `--build-dir`；后面的命令不再传载板参数。
+
+### 0.5 一次 prepare 固定载板、build 目录和共享缓存
+
+当前工作站已经把旧 Super 构建中的有效缓存迁移到独立目录：
+
+```text
+/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+```
+
+验证 Industrial J401 时执行：
 
 ```bash
 ./scripts/seeed/prepare-workspace.sh \
-  --machine recomputer-thor-carrier-j601 \
-  --build-dir build-seeed-thor-j601
+  --machine recomputer-industrial-orin-j401 \
+  --build-dir build-seeed-industrial-j401 \
+  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
 ```
 
-`--machine` 只在这次 prepare 命令中生效，不会导出到当前 shell，也不会修改全局环境。载板信息会固化在该 build 目录的 `conf/local.conf` 中；每个载板必须使用独立 build 目录。
+这条命令会：
 
-prepare 完成后，后续构建命令自动使用最近激活的 build 目录，不需要重复传入载板参数。可随时确认当前选择：
+1. 初始化锁定的 submodule；
+2. 创建 `build-seeed-industrial-j401`；
+3. 把 machine 固化到该目录的 `conf/local.conf`；
+4. 配置共享 `downloads` 和 `sstate-cache`；
+5. 把该 build 目录记录为当前 checkout 的活动工作区。
+
+`--machine` 只影响本次 prepare 及其目标 build 目录，不会导出全局环境变量。**一个 build 目录只能对应一个 machine**；切换载板时必须换一个新的 `--build-dir`。
+
+确认当前活动载板：
 
 ```bash
 ./scripts/seeed/build.sh current
 ```
 
-### 0.5 推荐的分阶段编译教程
-
-统一构建入口：
+Industrial J401 应显示：
 
 ```text
-scripts/seeed/build.sh
+Machine:   recomputer-industrial-orin-j401
 ```
 
-对于非默认载板，先用一次 prepare 命令固定目标 machine 和专用 build 目录：
+如果这里仍显示 Super，不要继续编译，应重新执行本节 prepare 命令。
 
-```bash
-./scripts/seeed/prepare-workspace.sh \
-  --machine recomputer-industrial-orin-j401 \
-  --build-dir build-seeed-industrial-j401
-```
+### 0.6 按顺序验证 metadata、DTB、BCT 和完整镜像
 
-prepare 会把这个 build 目录激活。后续的 `metadata`、`dtb`、`bootfiles`、`image`、`flash-package`、`sdk` 和 `prepare-flash.sh` 都自动读取其中固化的 `recomputer-industrial-orin-j401`，无需再次传入载板参数。
+后续命令自动使用活动 build 目录，不需要再传 `--machine` 或 `--build-dir`。
 
-> 不要让两个不同 machine 共用同一个 build 目录。切换载板时应重新运行 prepare 并更换 `--build-dir`，否则已有 `conf/local.conf` 和构建产物会与目标载板不一致。
-
-第一步，检查 layer、recipe 和最终变量：
+第一步，解析 metadata 并检查最终 BSP 变量：
 
 ```bash
 ./scripts/seeed/build.sh metadata
 ```
 
-第二步，只编译 DTB/DTBO：
+输出中的 `MACHINE` 必须和 `build.sh current` 一致，并且应看到：
+
+```text
+PREFERRED_PROVIDER_virtual/dtb="seeed-devicetree"
+```
+
+第二步，编译该载板的 DTB/DTBO：
 
 ```bash
 ./scripts/seeed/build.sh dtb
 ```
 
-第三步，安装并检查 Seeed BCT/pinmux 文件：
+首次执行会准备 kernel/OOT sysroot，因此可能出现大量 `Setscene tasks`，也可能拉取 `linux-noble-nvidia-tegra`。这是 `tegra-devicetree` 的正常依赖，不表示脚本错误。成功标志为：
+
+```text
+Tasks Summary: ... all succeeded.
+```
+
+第三步，安装并检查该载板的 BCT、pinmux 和 pad-voltage 文件：
 
 ```bash
 ./scripts/seeed/build.sh bootfiles
 ```
 
-第四步，构建完整镜像：
+脚本会对需要进入 tegraflash sysroot 的文件逐一打印 `OK:`；任何缺失文件都会直接返回非零状态。
+
+第四步，构建完整镜像和 tegraflash archive：
 
 ```bash
 ./scripts/seeed/build.sh image
 ```
 
-如果只修改了 tegraflash 打包逻辑，可以重建刷写包并发布到 deploy：
+只修改 tegraflash 打包逻辑时，可以执行：
 
 ```bash
 ./scripts/seeed/build.sh flash-package
 ```
 
-生成交叉开发 SDK：
+需要交叉开发 SDK 时执行：
 
 ```bash
 ./scripts/seeed/build.sh sdk
 ```
 
-一次解析全部 machine，并分别编译 `tegra234`、`tegra264` 设备树族：
+### 0.7 校验刷写包并执行实机刷写
 
-```bash
-./scripts/seeed/validate-all-machines.sh
-```
-
-`validate-all-machines.sh` 是矩阵构建检查，内部会遍历全部 machine，因此不需要指定单一载板参数。它不能代替各载板的完整 image 构建和实机刷写验证。
-
-如需临时操作另一个已经 prepare 的 build 目录，可只对当前命令指定：
-
-```bash
-./scripts/seeed/build.sh image \
-  --build-dir /data/yocto/build-seeed-industrial-j401
-```
-
-这个临时参数不会改变活动工作区。`build.sh --machine` 仅用于校验 build 目录的 machine，不能把一个已有 build 目录临时切换成另一块载板，以避免混用构建产物。
-
-### 0.6 校验并解压刷写包
-
-不要在 deploy 目录中直接解压，也不要把刷写目录放在 USB 移动硬盘上。使用：
+完整镜像成功后，使用脚本查找、解压并检查当前 machine 的刷写包：
 
 ```bash
 ./scripts/seeed/prepare-flash.sh
 ```
 
-脚本会：
+脚本会自动读取活动 build 目录和 machine，检查 DTB、BPMP DTB、pinmux、pad voltage、rootfs 和 `initrd-flash`，并打印实际解压目录。不要在 deploy 目录中手工覆盖解压。
 
-- 找到 deploy 中稳定软链接指向的 tegraflash archive；
-- 要求输出目录为空，避免混入旧文件；
-- 解压刷写包；
-- 从 `flashvars` 动态读取并检查当前 machine 的 DTB、BPMP DTB、pinmux、pad voltage、rootfs 和入口脚本；
-- 打印 `flashvars` 与 `.env.initrd-flash`；
-- 只输出后续刷写命令，不会自动运行 `sudo`。
-
-准备完成后：
+将目标板进入 Force Recovery Mode 后，按脚本最后输出的目录执行：
 
 ```bash
-cd ~/seeed-flash-recomputer-orin-super-j401
+cd ~/seeed-flash-recomputer-industrial-orin-j401
 lsusb -d 0955:
 sudo ./initrd-flash
 ```
 
-### 0.7 推荐目录布局
+只有出现以下结果，才能标记为“刷写验证通过”：
 
 ```text
-~/work/jetson-yocto/
-└── tegra-demo-distro/              # Git 源码，体积较小
-
-/data/yocto/
-├── build-seeed/         # 可删除、可重建
-└── cache/
-    ├── downloads/                  # 可跨 build 复用
-    └── sstate-cache/                # 可跨 build 复用
-
-~/seeed-flash-<machine>/             # 临时刷写目录，刷完可删除
+Final status: SUCCESS
+Successfully finished
 ```
 
-需要备份或分享时，只推送 Git commit。不要归档 `/data/yocto/build-*` 或 `~/seeed-flash-*`。
+刷写后还必须按第 13 章检查启动、网络、NVIDIA runtime 和载板外设。没有实机的 machine 只能记录为“构建验证/未实机验证”。
+
+### 0.8 切换到另一块载板
+
+例如从 Industrial J401 切换到 reServer AGX Orin J501x GMSL：
+
+```bash
+./scripts/seeed/prepare-workspace.sh \
+  --machine reserver-agx-orin-j501x-gmsl \
+  --build-dir build-seeed-reserver-j501x-gmsl \
+  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+
+./scripts/seeed/build.sh current
+./scripts/seeed/build.sh metadata
+./scripts/seeed/build.sh dtb
+./scripts/seeed/build.sh bootfiles
+./scripts/seeed/build.sh image
+./scripts/seeed/prepare-flash.sh
+```
+
+如果只想临时检查另一个已经 prepare 的 build 目录，可以为单条命令指定 `--build-dir`：
+
+```bash
+./scripts/seeed/build.sh current \
+  --build-dir build-seeed-industrial-j401
+```
+
+这个临时参数不会改变活动工作区。`build.sh --machine` 只用于校验 build 目录，不能把已有 build 目录切换成另一块载板。
+
+### 0.9 全 machine 构建矩阵检查
+
+```bash
+./scripts/seeed/validate-all-machines.sh
+```
+
+该脚本内部遍历全部 machine，因此不指定单一载板参数。它用于 metadata、`tegra234`/`tegra264` DT 和 BCT 安装检查，不能代替每块载板的完整 image 构建和实机刷写。
+
+### 0.10 推荐目录布局
+
+```text
+tegra-demo-distro/                    # Git 源码
+├── build-seeed-industrial-j401/     # Industrial J401 专用，可重建
+├── build-seeed-reserver-j501x-gmsl/ # J501x GMSL 专用，可重建
+└── ...
+
+yocto-seeed-cache/
+├── downloads/                       # 所有 machine 共享，删除 build 后保留
+└── sstate-cache/                     # 所有 machine 共享，删除 build 后保留
+
+~/seeed-flash-<machine>/              # 临时刷写目录，刷完可删除
+```
+
+需要备份或分享时，只推送 Git commit。不要归档 `build-*`、共享缓存或刷写目录。
 
 ## 目录
 
@@ -316,7 +326,7 @@ sudo ./initrd-flash
 13. 启动后验收
 14. 故障排查树
 15. 从“能启动”到“可量产”
-16. 复制到另一款 reComputer
+16. 扩展到新的 Seeed 或第三方载板
 17. BSP 交付物
 18. 当前示例的已知边界
 
@@ -444,16 +454,16 @@ Machine:  recomputer-orin-super-j401
 Image:    demo-image-full
 ```
 
-源 BSP 位于：
+源 BSP 位于（当前工作站）：
 
 ```text
-../Linux_for_Tegra
+/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra
 ```
 
 关键入口文件是：
 
 ```text
-../Linux_for_Tegra/recomputer-orin-super-j401.conf
+/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra/recomputer-orin-super-j401.conf
 ```
 
 该文件继承 NVIDIA 的：
@@ -551,8 +561,7 @@ LAYERSERIES_COMPAT_seeed = "wrynose"
 检查 layer 是否生效：
 
 ```bash
-. ./setup-env --machine recomputer-orin-super-j401 build-seeed
-bitbake-layers show-layers
+./scripts/seeed/build.sh metadata
 ```
 
 ## 5. 从 L4T flash config 映射到 Yocto machine
@@ -661,7 +670,7 @@ DT_FILES = " \
 
 厂商顶层 DTS 往往只包含少量内容，真正定义分散在多个 `.dts/.dtsi` 中。应递归检查：
 
-```bash
+```text
 grep -R '^#include\|/include/' <vendor-dts-directory>
 ```
 
@@ -672,8 +681,8 @@ grep -R '^#include\|/include/' <vendor-dts-directory>
 DTB 能编译不代表选择正确。至少检查：
 
 ```bash
-bitbake -e virtual/dtb | grep -E '^(PN|FILE|PROVIDES|PREFERRED_PROVIDER_virtual/dtb)='
-bitbake -f -c compile seeed-devicetree
+./scripts/seeed/build.sh metadata
+./scripts/seeed/build.sh dtb
 ```
 
 预期生成：
@@ -685,7 +694,7 @@ tegra234-p3767-camera-p3768-imx219-quad-seeed.dtbo
 
 必要时反编译核对关键节点：
 
-```bash
+```text
 dtc -I dtb -O dts -o /tmp/board.dts <generated-board.dtb>
 grep -nE 'compatible|pcie|nvme|usb|ethernet|display|camera' /tmp/board.dts
 ```
@@ -715,7 +724,7 @@ do_install:append:recomputer-orin-super-j401() {
 验证安装任务：
 
 ```bash
-bitbake -f -c install tegra-bootfiles
+./scripts/seeed/build.sh bootfiles
 ```
 
 然后检查：
@@ -776,7 +785,7 @@ IMAGE_CLASSES:append = " seeed-recomputer-super-tegraflash"
 
 DTB 和 BCT 只解决硬件描述。如果厂商 BSP 修改了驱动，需要对比源树：
 
-```bash
+```text
 git diff <nvidia-baseline> -- Linux_for_Tegra/source/kernel
 git diff <nvidia-baseline> -- Linux_for_Tegra/source/nvidia-oot
 ```
@@ -817,7 +826,7 @@ recipes-kernel/nvidia-kernel-oot/nvidia-kernel-oot_*.bbappend
 本示例使用：
 
 ```bash
-bitbake demo-image-full
+./scripts/seeed/build.sh image
 ```
 
 `demo-image-full` 包含 Python、OpenSSH、Docker、CUDA runtime、cuDNN、TensorRT、VPI 和示例程序，但它不是 Ubuntu，也不是完整的 SDK Manager 开发环境。
@@ -894,33 +903,27 @@ EXTRA_USERS_PARAMS = " \
 ### 9.4 推荐生成交叉 SDK
 
 ```bash
-. ./setup-env --machine recomputer-orin-super-j401 build-seeed
-bitbake demo-image-full -c populate_sdk
+./scripts/seeed/build.sh sdk
 ```
 
 输出位于：
 
 ```text
-build-seeed/tmp/deploy/sdk/
+<active-build>/tmp/deploy/sdk/
 ```
 
 应用团队可以安装 SDK 后交叉编译，不必在目标机安装 GCC/CMake。
 
 ## 10. 构建流程
 
-如果使用第 0 章提供的脚本，通常不需要手工执行本章命令。本章保留底层 BitBake 命令，便于理解脚本行为和排查失败。
+第 0 章的 `scripts/seeed` 入口是本仓库推荐的实际操作方式。本章只说明脚本背后的 BitBake 阶段，不建议在同一个 build 目录中混用两套入口。
 
 ### 10.1 初始化环境
 
-```bash
-cd tegra-demo-distro
-. ./setup-env --machine recomputer-orin-super-j401 build-seeed
-```
-
-确认配置：
+确认当前活动 build 和 machine：
 
 ```bash
-bitbake -e demo-image-full | grep -E '^(MACHINE|DISTRO|PREFERRED_PROVIDER_virtual/dtb|KERNEL_DEVICETREE)='
+./scripts/seeed/build.sh current
 ```
 
 ### 10.2 推荐的分阶段构建
@@ -928,26 +931,25 @@ bitbake -e demo-image-full | grep -E '^(MACHINE|DISTRO|PREFERRED_PROVIDER_virtua
 先检查 metadata：
 
 ```bash
-bitbake-layers show-layers
-bitbake-layers show-recipes seeed-devicetree
+./scripts/seeed/build.sh metadata
 ```
 
 再编译 DTB：
 
 ```bash
-bitbake -f -c compile seeed-devicetree
+./scripts/seeed/build.sh dtb
 ```
 
 再检查 bootfiles：
 
 ```bash
-bitbake -f -c install tegra-bootfiles
+./scripts/seeed/build.sh bootfiles
 ```
 
 最后构建镜像：
 
 ```bash
-bitbake demo-image-full
+./scripts/seeed/build.sh image
 ```
 
 成功示例：
@@ -958,14 +960,16 @@ Tasks Summary: Attempted 13211 tasks ... all succeeded.
 
 ### 10.3 下载和 sstate 缓存
 
-大型 Jetson Yocto 构建应共享：
+大型 Jetson Yocto 构建应通过 `prepare-workspace.sh --cache-dir` 共享：
 
-```bitbake
-DL_DIR ?= "/path/to/shared/downloads"
-SSTATE_DIR ?= "/path/to/shared/sstate-cache"
+```bash
+./scripts/seeed/prepare-workspace.sh \
+  --machine recomputer-industrial-orin-j401 \
+  --build-dir build-seeed-industrial-j401 \
+  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
 ```
 
-这可以避免重复下载 NVIDIA、kernel、CUDA 等大型组件，也有助于在网络不稳定时复用成功 fetch 的内容。
+脚本会生成 `conf/seeed-cache.conf`，配置 `DL_DIR`、`SSTATE_DIR` 和 hash server。共享缓存可以避免重复下载 NVIDIA、kernel、CUDA 等大型组件，也有助于在网络不稳定时复用成功 fetch 的内容。
 
 ## 11. 构建后必须进行的静态验证
 
@@ -974,11 +978,10 @@ SSTATE_DIR ?= "/path/to/shared/sstate-cache"
 ### 11.1 检查关键 BitBake 变量
 
 ```bash
-bitbake -e demo-image-full | grep -E \
-'^(MACHINE|PREFERRED_PROVIDER_virtual/dtb|KERNEL_DEVICETREE|TEGRA_FLASHVAR_(DTB_FILE|BPFDTB_FILE|PINMUX_CONFIG|PMC_CONFIG|DCE_OVERLAY))='
+./scripts/seeed/build.sh metadata
 ```
 
-本示例预期：
+对于 Super J401 实机案例，关键变量预期为：
 
 ```text
 MACHINE="recomputer-orin-super-j401"
@@ -990,38 +993,17 @@ TEGRA_FLASHVAR_PMC_CONFIG="recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.
 TEGRA_FLASHVAR_DCE_OVERLAY="tegra234-dcb-p3767-0000-hdmi.dtbo"
 ```
 
-### 11.2 找到 tegraflash 包
-
-```text
-build-seeed/tmp/deploy/images/recomputer-orin-super-j401/
-```
-
-使用稳定软链接：
-
-```text
-demo-image-full-recomputer-orin-super-j401.rootfs.tegraflash-tar.zst
-```
-
-### 11.3 解压到独立目录
-
-不要直接在 deploy 根目录覆盖解压，也不要把解压目录和原始 archive 混在一起：
+### 11.2 找到、解压并校验 tegraflash 包
 
 ```bash
-mkdir -p /path/on/local-disk/recomputer-super-flash
-cd /path/on/local-disk/recomputer-super-flash
-tar xf /path/to/demo-image-full-recomputer-orin-super-j401.rootfs.tegraflash-tar.zst
+./scripts/seeed/prepare-flash.sh
 ```
 
-建议放在主机本地 SSD，而不是 USB 移动硬盘。刷写期间会同时进行大文件读取和 USB gadget 存储操作，本地磁盘更稳定。
+它会从活动 build 的 `tmp/deploy/images/<machine>/` 找到当前 image 的 archive，解压到独立目录，并检查 `flashvars` 引用的关键文件。建议把输出目录放在主机本地 SSD，而不是 USB 移动硬盘。
 
-### 11.4 检查刷写变量
+### 11.3 Super J401 刷写变量参考
 
-```bash
-grep -E '^(DTB_FILE|BPFDTB_FILE|PINMUX_CONFIG|PMC_CONFIG|DCE_OVERLAY|PLUGIN_MANAGER_OVERLAYS|BOOTCONTROL_OVERLAYS)=' flashvars
-cat .env.initrd-flash
-```
-
-预期包含：
+`prepare-flash.sh` 会自动打印当前 machine 的 `flashvars` 和 `.env.initrd-flash`。以下内容仅是已经完成实机验证的 Super J401 参考值，其他载板必须以脚本实际输出为准：
 
 ```text
 BPFDTB_FILE="tegra234-bpmp-3767-0000-3768-super.dtb"
@@ -1033,18 +1015,9 @@ ROOTFS_DEVICE="nvme0n1"
 ROOTFS_IMAGE="demo-image-full.ext4"
 ```
 
-### 11.5 检查所有引用文件存在
+### 11.4 检查所有引用文件存在
 
-```bash
-for file in \
-  recomputer-super-orin-j401-gpio-p3767-hdmi-a03.dtsi \
-  recomputer-super-orin-j401-padvoltage-p3767-hdmi-a03.dtsi \
-  recomputer-super-orin-j401-pinmux-p3767-hdmi-a03.dtsi \
-  tegra234-j401-p3768-0000+p3767-0000-recomputer-super.dtb \
-  tegra234-bpmp-3767-0000-3768-super.dtb; do
-    test -s "$file" || echo "MISSING: $file"
-done
-```
+`prepare-flash.sh` 已经执行这一步。若需要手工复核，应在它打印的独立刷写目录中，根据当前 machine 的 `flashvars` 动态读取文件名，不要复制 Super J401 的固定文件名到其他载板。
 
 ## 12. 刷写流程
 
@@ -1204,10 +1177,21 @@ systemctl status docker
 
 处理：
 
-- 检查网络和代理；
-- 使用共享 `DL_DIR`；
-- 复用已成功构建目录的 downloads；
+- 先执行 `./scripts/seeed/build.sh current`，确认当前 build 和 machine；
+- 确认 `build.sh current` 显示的 `DL_DIR` 是共享缓存，而不是刚创建的空目录；
+- 如果已有成功构建的缓存，重新执行 `prepare-workspace.sh` 并指定同一个 `--cache-dir`；
+- 使用 `git ls-remote` 检查目标分支是否可访问，再重试 `./scripts/seeed/build.sh dtb`；
+- `Setscene tasks: ...` 是正常缓存恢复进度，不是错误；
+- 若日志出现 `early EOF`、`unexpected disconnect`，通常是大型 Git 镜像下载断流，不要修改 machine 或 DTB 文件；
 - 不要通过手工修改 fetch URL 掩盖版本不匹配。
+
+本仓库当前 kernel fetch 的直接检查命令为：
+
+```bash
+git ls-remote \
+  https://gitlab.com/nvidia/nv-tegra/3rdparty/canonical/linux-noble.git \
+  refs/heads/l4t/l4t-r39.2-Ubuntu-nvidia-tegra-6.8.0-1021.21
+```
 
 ### 14.2 `tegra-bootfiles:do_install` 找不到自定义文件
 
@@ -1221,8 +1205,10 @@ systemctl status docker
 可以查看：
 
 ```bash
-bitbake -e tegra-bootfiles | grep -E '^(FILESPATH|SRC_URI|UNPACKDIR|WORKDIR)='
+./scripts/seeed/build.sh bootfiles
 ```
+
+脚本失败时再进入对应 BitBake task 日志检查 `FILESPATH`、`SRC_URI`、`UNPACKDIR` 和 `WORKDIR`，不要在未初始化的普通 shell 中直接运行 `bitbake -e`。
 
 ### 14.3 刷写时报 pinmux `cpp` 失败
 
