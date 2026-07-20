@@ -9,6 +9,7 @@ The status below deliberately separates build validation from hardware claims.
 | Yocto MACHINE | Seeed L4T config | Validation |
 | --- | --- | --- |
 | `recomputer-orin-super-j401` | `recomputer-orin-super-j401.conf` | Build, initrd-flash, NVMe boot, HDMI and basic USB validated |
+| `reserver-agx-orin-j501x-gmsl` | `reserver-agx-orin-j501x-gmsl.conf` | AGX Orin SKU `0004`: build, initrd-flash and system boot validated; GMSL and peripheral validation pending |
 
 ## Build validated, not hardware validated
 
@@ -24,7 +25,6 @@ The status below deliberately separates build validation from hardware claims.
 | `recomputer-mini-agx-orin-j501x` | `recomputer-mini-agx-orin-j501x.conf` | AGX Orin |
 | `recomputer-robo-agx-orin-j501x` | `recomputer-robo-agx-orin-j501x.conf` | AGX Orin |
 | `reserver-agx-orin-j501x` | `reserver-agx-orin-j501x.conf` | AGX Orin |
-| `reserver-agx-orin-j501x-gmsl` | `reserver-agx-orin-j501x-gmsl.conf` | AGX Orin |
 | `seeed-agx-orin-kit` | `seeed-agx-orin-kit.conf` | AGX Orin |
 | `recomputer-thor-carrier-j601` | `recomputer-thor-carrier-j601.conf` | Thor T5000 |
 | `recomputer-thor-carrier-j6014` | `recomputer-thor-carrier-j6014.conf` | Thor T4000 |

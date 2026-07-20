@@ -7,7 +7,9 @@ using Yocto Project tools and the [meta-tegra](https://github.com/OE4T/meta-tegr
 
 This workspace includes `meta-seeed` machine definitions for all 16 Seeed
 carrier configurations in the matching L4T BSP. The reComputer Super J401 has
-also completed physical flash and basic peripheral validation. See the
+completed physical flash and basic peripheral validation; the reServer J501X
+GMSL with AGX Orin SKU 0004 has completed physical flash and boot validation.
+See the
 [support matrix](layers/meta-seeed/docs/board-support-status.md) and the
 [end-to-end Chinese BSP guide](layers/meta-seeed/docs/DIY-YOcto-recomputer-orin-super-j401.md).
 

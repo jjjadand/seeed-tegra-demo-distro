@@ -97,6 +97,10 @@ if [[ -n $EXPECTED_MACHINE && $EXPECTED_MACHINE != "$MACHINE" ]]; then
     exit 1
 fi
 
+MODULE_SKU=$(sed -n \
+    's/^[[:space:]]*SEEED_MODULE_SKU[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$BUILD_DIR/conf/seeed-machine.conf" 2>/dev/null | head -n 1)
+
 OUTPUT_DIR=${OUTPUT_DIR:-$HOME/seeed-flash-$MACHINE}
 
 if [[ -z $ARCHIVE ]]; then
@@ -151,6 +155,19 @@ for file in "${required_files[@]}"; do
     fi
     echo "OK: $file"
 done
+
+archive_module_sku=$(sed -n \
+    's/^DEFAULTS\[BOARDSKU\]="\([^"]*\)"$/\1/p' \
+    "$OUTPUT_DIR/.env.initrd-flash" | tail -1)
+if [[ -n $MODULE_SKU && $archive_module_sku != "$MODULE_SKU" ]]; then
+    echo "ERROR: flash archive module SKU does not match the prepared workspace." >&2
+    echo "  Workspace: $MODULE_SKU" >&2
+    echo "  Archive:   ${archive_module_sku:-missing}" >&2
+    exit 1
+fi
+if [[ -n $archive_module_sku ]]; then
+    echo "OK: module SKU $archive_module_sku"
+fi
 
 echo
 grep -E '^(DTB_FILE|BPFDTB_FILE|PINMUX_CONFIG|PMC_CONFIG|DCE_OVERLAY|PLUGIN_MANAGER_OVERLAYS|BOOTCONTROL_OVERLAYS)=' \

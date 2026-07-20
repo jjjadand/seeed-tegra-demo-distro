@@ -2,7 +2,7 @@
 
 本文用于实际验证本仓库支持的全部 Seeed Jetson 第三方载板。仓库已经为本地 Seeed Linux for Tegra（L4T）BSP 中的 16 个载板配置建立独立 Yocto machine；每块载板使用独立 build 目录，但共享 downloads 和 sstate 缓存。**第 0 章是建议逐条执行的验证教程**，后续章节用于解释移植原理和排查问题。
 
-本文仍以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 记录已完成的实机结果；验证其他载板时，必须使用对应 machine，且应标记为“构建验证/未实机验证”，直到完成真实刷写和外设验收。
+本文仍以 **Seeed reComputer Super J401 + Jetson Orin NX 16GB** 记录完整的基础外设实机结果。另有 **reServer J501X GMSL + Jetson AGX Orin SKU 0004** 已完成 Yocto 包刷写和系统启动验证，但尚未声明 GMSL 及其他外设验证完成。验证其他载板时，必须使用对应 machine，并准确区分“构建验证”“刷机/启动验证”和“外设验证”。
 
 本文不仅给出最终文件，还解释每类 BSP 文件属于启动链的哪一层、如何从厂商 L4T BSP 提取信息、如何验证生成物，以及如何定位构建和刷写问题。其他 reComputer 或自定义 Jetson 载板可以沿用相同流程。
 
@@ -17,7 +17,7 @@
 
 > 本文示例基于 `meta-tegra` 的 `wrynose` 分支、L4T R39.2.0 / JetPack 7.2。移植其他版本时，必须使用与目标 L4T 版本匹配的 OE4T 分支和 NVIDIA BSP 文件。
 
-> **验证范围说明：** 16 个默认 machine 均已完成 BitBake metadata 解析，`tegra234` 与 `tegra264` 板级设备树已完成构建验证，自定义 BCT 文件也已验证进入 tegraflash sysroot；目前只有 reComputer Super J401 搭配 Jetson Orin NX 16GB（P3767-0000）完成刷写、启动和基础外设实机验证。未实机验证的 machine 不能直接视为产品支持。
+> **验证范围说明：** 16 个默认 machine 均已完成 BitBake metadata 解析，`tegra234` 与 `tegra264` 板级设备树已完成构建验证，自定义 BCT 文件也已验证进入 tegraflash sysroot。reComputer Super J401 + Jetson Orin NX 16GB（P3767-0000）已完成刷写、启动和基础外设验证；reServer J501X GMSL + Jetson AGX Orin SKU 0004 已完成刷写和启动验证。其余 machine 仍不能直接视为已完成产品级硬件验证。
 
 本地 `Linux_for_Tegra` 中其他 Seeed 板卡的源文件盘点和当前 Yocto 支持状态见：
 
@@ -28,7 +28,7 @@ layers/meta-seeed/docs/board-support-status.md
 也可以生成详细的 L4T 配置清单：
 
 ```bash
-L4T_DIR=/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra
+L4T_DIR=/path/to/Linux_for_Tegra
 
 ./scripts/seeed/discover-l4t-boards.sh \
   --l4t-dir "$L4T_DIR" \
@@ -132,14 +132,14 @@ cd tegra-demo-distro
 layers/meta-seeed/docs/board-support-status.md
 ```
 
-下面以 `recomputer-industrial-orin-j401` 为例。验证其他载板时，只替换下一节 prepare 命令中的 `--machine` 和 `--build-dir`；后面的命令不再传载板参数。
+下面以 `recomputer-industrial-orin-j401` 为例。验证其他载板时，只替换下一节 prepare 命令中的 `--machine` 和 `--build-dir`；AGX Orin 还必须传入实际模组的 `--module-sku`。后面的命令不再重复传载板或模组参数。
 
 ### 0.5 一次 prepare 固定载板、build 目录和共享缓存
 
-当前工作站已经把旧 Super 构建中的有效缓存迁移到独立目录：
+建议把多个 machine 共用的下载和 sstate 缓存放在独立目录：
 
 ```text
-/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+$HOME/.cache/yocto-seeed
 ```
 
 验证 Industrial J401 时执行：
@@ -148,7 +148,7 @@ layers/meta-seeed/docs/board-support-status.md
 ./scripts/seeed/prepare-workspace.sh \
   --machine recomputer-industrial-orin-j401 \
   --build-dir build-seeed-industrial-j401 \
-  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+  --cache-dir "$HOME/.cache/yocto-seeed"
 ```
 
 这条命令会：
@@ -229,6 +229,25 @@ Tasks Summary: ... all succeeded.
 ./scripts/seeed/build.sh sdk
 ```
 
+如果希望一次完成本节的 metadata、DTB、BCT 和完整镜像构建，执行：
+
+```bash
+./scripts/seeed/build.sh all
+```
+
+它会严格按照 `metadata → dtb → bootfiles → image` 顺序运行，任一步失败都会立即停止。`all` 不包含 SDK，也不会自动解压或刷写；完整镜像成功后仍需执行第 0.7 节的 `prepare-flash.sh`。
+
+也可以在一条命令中选择已经 prepare 的载板/模组 build 目录并完成全部阶段：
+
+```bash
+./scripts/seeed/build.sh all \
+  --machine reserver-agx-orin-j501x-gmsl \
+  --build-dir build-seeed-reserver-j501x-gmsl-sku0004
+```
+
+这条命令只选择已经 prepare 的目录，不接受 `--module-sku`，也不会修改目录中
+固化的 SKU。首次构建必须先按第 0.8 节执行 `prepare-workspace.sh`。
+
 ### 0.7 校验刷写包并执行实机刷写
 
 完整镜像成功后，使用脚本查找、解压并检查当前 machine 的刷写包：
@@ -263,8 +282,9 @@ Successfully finished
 ```bash
 ./scripts/seeed/prepare-workspace.sh \
   --machine reserver-agx-orin-j501x-gmsl \
-  --build-dir build-seeed-reserver-j501x-gmsl \
-  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+  --module-sku 0004 \
+  --build-dir build-seeed-reserver-j501x-gmsl-sku0004 \
+  --cache-dir "$HOME/.cache/yocto-seeed"
 
 ./scripts/seeed/build.sh current
 ./scripts/seeed/build.sh metadata
@@ -273,6 +293,10 @@ Successfully finished
 ./scripts/seeed/build.sh image
 ./scripts/seeed/prepare-flash.sh
 ```
+
+上例复用 `$HOME/.cache/yocto-seeed`，避免重新
+下载和生成全部 sstate。如果以后迁移缓存，只需在 prepare 时替换 `--cache-dir`。
+不要复用此前 SKU `0000` 的 build 目录或刷写包。
 
 对于已经 prepare 的 build 目录，也可以直接在任意 `build.sh` 命令中显式选择；成功校验后，它会成为后续命令的活动工作区：
 
@@ -291,7 +315,14 @@ Successfully finished
   --no-activate
 ```
 
-`build.sh` 不会把一个已有 build 目录改成另一种 machine；新载板第一次构建仍必须先执行 `prepare-workspace.sh`。
+`build.sh` 不会把一个已有 build 目录改成另一种 machine。AGX Orin 的
+`prepare-workspace.sh --module-sku` 会写入 `conf/seeed-machine.conf`，同一 build
+目录也不能改成另一个 module SKU。载板或模组组合变化时必须使用新的 build 目录。
+
+当前 reServer J501X/J501X GMSL 和 Seeed AGX Orin Kit 接受
+`0000`、`0001`、`0002`、`0004`、`0005`；reComputer Mini/Robo AGX Orin
+按提供的 L4T 配置接受 `0004`、`0005`。其中 `0001`、`0002` 复用 `0000`
+的 kernel DTB 和 BPMP DTB，但刷写包仍保留实际 `BOARDSKU` 并严格校验。
 
 ### 0.9 全 machine 构建矩阵检查
 
@@ -464,16 +495,16 @@ Machine:  recomputer-orin-super-j401
 Image:    demo-image-full
 ```
 
-源 BSP 位于（当前工作站）：
+源 BSP 目录记为：
 
 ```text
-/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra
+/path/to/Linux_for_Tegra
 ```
 
 关键入口文件是：
 
 ```text
-/media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/Linux_for_Tegra/recomputer-orin-super-j401.conf
+/path/to/Linux_for_Tegra/recomputer-orin-super-j401.conf
 ```
 
 该文件继承 NVIDIA 的：
@@ -976,7 +1007,7 @@ Tasks Summary: Attempted 13211 tasks ... all succeeded.
 ./scripts/seeed/prepare-workspace.sh \
   --machine recomputer-industrial-orin-j401 \
   --build-dir build-seeed-industrial-j401 \
-  --cache-dir /media/darklee/467ec345-89bd-43e0-bdb3-0d0bd9c0ca8e/yocto-seeed-cache
+  --cache-dir "$HOME/.cache/yocto-seeed"
 ```
 
 脚本会生成 `conf/seeed-cache.conf`，配置 `DL_DIR`、`SSTATE_DIR` 和 hash server。共享缓存可以避免重复下载 NVIDIA、kernel、CUDA 等大型组件，也有助于在网络不稳定时复用成功 fetch 的内容。

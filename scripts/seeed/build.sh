@@ -18,6 +18,7 @@ Usage: $(basename "$0") <command> [options]
 Commands:
   machines       List all Seeed MACHINE names
   current        Show the active build directory and configured MACHINE
+  all            Run metadata, DTB, bootfiles, and image in order
   metadata       Parse metadata and print the key BSP selections
   dtb            Compile the Seeed DTB/DTBO provider
   bootfiles      Install and verify custom BCT/pinmux files
@@ -79,7 +80,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$action" in
-    machines|current|metadata|dtb|bootfiles|image|flash-package|sdk|clean)
+    machines|current|all|metadata|dtb|bootfiles|image|flash-package|sdk|clean)
         ;;
     *)
         echo "Unknown command: $action" >&2
@@ -145,8 +146,12 @@ if [[ $BUILD_DIR_FROM_CLI == yes && $ACTIVATE_WORKSPACE == yes ]]; then
 fi
 
 if [[ $action == current ]]; then
+    configured_module_sku=$(sed -n \
+        's/^[[:space:]]*SEEED_MODULE_SKU[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$BUILD_DIR/conf/seeed-machine.conf" 2>/dev/null | head -n 1)
     echo "Build dir: $BUILD_DIR"
     echo "Machine:   $configured_machine"
+    echo "Module SKU: ${configured_module_sku:-machine-default}"
     sed -n 's/^[[:space:]]*\(DL_DIR\|SSTATE_DIR\)[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1: \2/p' \
         "$BUILD_DIR/conf/seeed-cache.conf" 2>/dev/null || true
     exit 0
@@ -161,32 +166,62 @@ set +u
 . ./setup-env "$BUILD_DIR"
 set -u
 
+run_metadata() {
+    bitbake-layers show-layers
+    bitbake-layers show-recipes seeed-devicetree
+    bitbake -e "$IMAGE" | grep -E \
+        '^(MACHINE|DISTRO|SEEED_MODULE_SKU|PREFERRED_PROVIDER_virtual/dtb|KERNEL_DEVICETREE|TEGRA_BOARDSKU|TEGRA_FLASHVAR_(DTB_FILE|BPFDTB_FILE|PINMUX_CONFIG|PMC_CONFIG|DCE_OVERLAY))='
+}
+
+run_dtb() {
+    bitbake -f -c compile seeed-devicetree
+}
+
+run_bootfiles() {
+    bitbake -f -c install tegra-bootfiles
+    local workdir
+    workdir=$(bitbake -e tegra-bootfiles | sed -n 's/^WORKDIR="\(.*\)"$/\1/p')
+    local files=()
+    mapfile -t files < <(bitbake -e tegra-bootfiles | sed -n \
+        's/^TEGRA_FLASHVAR_\(PINMUX_CONFIG\|PMC_CONFIG\)="\(.*\)"$/\2/p')
+    local file
+    for file in "${files[@]}"; do
+        [[ -n $file ]] || continue
+        test -s "$workdir/image/usr/share/tegraflash/$file" || {
+            echo "ERROR: tegra-bootfiles did not install $file" >&2
+            return 1
+        }
+        echo "OK: $file"
+    done
+}
+
+run_image() {
+    bitbake "$IMAGE"
+}
+
 case "$action" in
+    all)
+        echo "==> [1/4] Validating metadata"
+        run_metadata
+        echo "==> [2/4] Compiling DTB/DTBO"
+        run_dtb
+        echo "==> [3/4] Installing and checking bootfiles"
+        run_bootfiles
+        echo "==> [4/4] Building $IMAGE"
+        run_image
+        echo "==> Seeed validation and image build completed: $configured_machine"
+        ;;
     metadata)
-        bitbake-layers show-layers
-        bitbake-layers show-recipes seeed-devicetree
-        bitbake -e "$IMAGE" | grep -E \
-            '^(MACHINE|DISTRO|PREFERRED_PROVIDER_virtual/dtb|KERNEL_DEVICETREE|TEGRA_FLASHVAR_(DTB_FILE|BPFDTB_FILE|PINMUX_CONFIG|PMC_CONFIG|DCE_OVERLAY))='
+        run_metadata
         ;;
     dtb)
-        bitbake -f -c compile seeed-devicetree
+        run_dtb
         ;;
     bootfiles)
-        bitbake -f -c install tegra-bootfiles
-        workdir=$(bitbake -e tegra-bootfiles | sed -n 's/^WORKDIR="\(.*\)"$/\1/p')
-        mapfile -t files < <(bitbake -e tegra-bootfiles | sed -n \
-            's/^TEGRA_FLASHVAR_\(PINMUX_CONFIG\|PMC_CONFIG\)="\(.*\)"$/\2/p')
-        for file in "${files[@]}"; do
-            [[ -n $file ]] || continue
-            test -s "$workdir/image/usr/share/tegraflash/$file" || {
-                echo "ERROR: tegra-bootfiles did not install $file" >&2
-                exit 1
-            }
-            echo "OK: $file"
-        done
+        run_bootfiles
         ;;
     image)
-        bitbake "$IMAGE"
+        run_image
         ;;
     flash-package)
         bitbake -f -c image_tegraflash_tar "$IMAGE"

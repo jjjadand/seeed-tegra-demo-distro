@@ -11,7 +11,8 @@ usage() {
 Usage: $(basename "$0") [--build-dir DIR]
 
 Parse every Seeed machine and compile the tegra234 and tegra264 device-tree
-families. This validates builds only; it does not claim hardware validation.
+families. Recipe-level final-DTB checks also validate the initrd-flash USB
+device-mode path. This does not claim physical hardware validation.
 EOF
 }
 
@@ -55,4 +56,5 @@ for machine in recomputer-orin-super-j401 recomputer-thor-carrier-j601; do
         bitbake -c compile seeed-devicetree
 done
 
-echo "Validated ${#machines[@]} Seeed machines. Hardware validation is separate."
+echo "Validated ${#machines[@]} Seeed machines and final-DTB invariants."
+echo "Physical flash and peripheral validation remain separate."
