@@ -16,6 +16,45 @@ See the
 Quick start from a clean checkout:
 
 ```bash
+./scripts/seeed/prepare-workspace.sh \
+  --machine recomputer-orin-super-j401 \
+  --build-dir build-seeed-super-j401
+./scripts/seeed/build.sh metadata --build-dir build-seeed-super-j401
+./scripts/seeed/build.sh dtb --build-dir build-seeed-super-j401
+./scripts/seeed/build.sh image --build-dir build-seeed-super-j401
+./scripts/seeed/prepare-flash.sh \
+  --build-dir build-seeed-super-j401 \
+  --output-dir ~/seeed-flash-recomputer-orin-super-j401
+```
+
+For the complete Chinese build, flash, validation, and troubleshooting guide,
+see [DIY-YOcto-recomputer-orin-super-j401.md](layers/meta-seeed/docs/DIY-YOcto-recomputer-orin-super-j401.md).
+The shorter script reference is [scripts/seeed/README.md](scripts/seeed/README.md).
+
+The Super J401 example currently targets the Jetson Orin NX 16GB module
+(`P3767-0000`) through its machine configuration, so it does not accept or
+need `--module-sku`. AGX Orin carrier configurations that support multiple
+module SKUs must select the module while preparing a separate build directory,
+for example:
+
+```bash
+./scripts/seeed/prepare-workspace.sh \
+  --machine reserver-agx-orin-j501x-gmsl \
+  --module-sku 0004 \
+  --build-dir build-seeed-reserver-j501x-gmsl-sku0004
+```
+
+The default `demo-image-full` includes CUDA runtime libraries and samples,
+TensorRT/VPI components, and Tegra multimedia API tests. `build.sh sdk`
+generates the standard OE4T/Yocto cross-development SDK with CUDA host tools;
+it is not an Ubuntu JetPack SDK Manager environment. The productized Route B
+images, package groups, and per-machine release SDK are documented as a plan
+in [yocto-route-b-build-plan.md](layers/meta-seeed/docs/yocto-route-b-build-plan.md)
+and are not all implemented yet.
+
+For the generic upstream tegrademo workflow, continue with:
+
+```bash
 ./scripts/seeed/prepare-workspace.sh
 ./scripts/seeed/build.sh metadata
 ./scripts/seeed/build.sh dtb
