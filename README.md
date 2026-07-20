@@ -27,16 +27,16 @@ and module combination.
 | reComputer Mini AGX Orin J501X | `recomputer-mini-agx-orin-j501x` | AGX Orin `P3701-0004`/`P3701-0005` | `0004` or `0005` |
 | reComputer Orin J401 | `recomputer-orin-j401` | Jetson Orin NX, `P3767-0000` | 不传 |
 | reComputer Orin J40mini | `recomputer-orin-j40mini` | Jetson Orin NX, `P3767-0000` | 不传 |
-| reComputer Robotics J401 GMSL | `recomputer-orin-robotics-j401-gmsl` | Jetson Orin NX, `P3767-0000` | 不传 |
 | reComputer Robotics J401 | `recomputer-orin-robotics-j401` | Jetson Orin NX, `P3767-0000` | 不传 |
+| reComputer Robotics J401 GMSL | `recomputer-orin-robotics-j401-gmsl` | Jetson Orin NX, `P3767-0000` | 不传 |
 | reComputer Super J401 | `recomputer-orin-super-j401` | Jetson Orin NX 16GB, `P3767-0000` | 不传 |
 | reComputer Robo AGX Orin J501X | `recomputer-robo-agx-orin-j501x` | AGX Orin `P3701-0004`/`P3701-0005` | `0004` or `0005` |
 | reComputer Rugged Orin J401 | `recomputer-rugged-orin-j401` | Jetson Orin NX, `P3767-0000` | 不传 |
 | reComputer Thor Carrier J601 | `recomputer-thor-carrier-j601` | AGX Thor, `P3834-0008` | 不传 |
 | reComputer Thor Carrier J6014 | `recomputer-thor-carrier-j6014` | AGX Thor, `P3834-0000` | 不传 |
 | reComputer Thor Carrier J6015 | `recomputer-thor-carrier-j6015` | AGX Thor, `P3834-0008` | 不传 |
-| reServer AGX Orin J501X GMSL | `reserver-agx-orin-j501x-gmsl` | AGX Orin | `0000`, `0001`, `0002`, `0004`, or `0005` |
 | reServer AGX Orin J501X | `reserver-agx-orin-j501x` | AGX Orin | `0000`, `0001`, `0002`, `0004`, or `0005` |
+| reServer AGX Orin J501X GMSL | `reserver-agx-orin-j501x-gmsl` | AGX Orin | `0000`, `0001`, `0002`, `0004`, or `0005` |
 | reServer Industrial Orin J401 | `reserver-industrial-orin-j401` | Jetson Orin NX, `P3767-0000` | 不传 |
 | Seeed AGX Orin Kit | `seeed-agx-orin-kit` | AGX Orin | `0000`, `0001`, `0002`, `0004`, or `0005` |
 
