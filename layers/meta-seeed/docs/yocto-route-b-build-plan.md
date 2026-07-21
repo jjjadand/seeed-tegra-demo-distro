@@ -319,7 +319,8 @@ APT 软件仓库，也不声明与 Ubuntu JetPack rootfs 完全一致。
 
 ### 5.4 SDK 规划
 
-每个发布 machine 至少生成 development image 对应的标准 SDK：
+标准 SDK 是面向 x86_64 PC 交叉编译的可选用户产物，不是刷机或板端开发的前置
+步骤。发布工程可为需要主机交叉编译支持的 machine 生成：
 
 ```bash
 ./scripts/seeed/build.sh sdk --image seeed-image-jetson-development
@@ -389,10 +390,11 @@ overlays 和 flash image class 均来自当前 Seeed machine。
 - rootfs 中没有意外安装完整编译工具链。
 - tegraflash archive 使用当前 Seeed machine 的 flash variables。
 
-### 阶段 4：构建 development image 和 SDK
+### 阶段 4：构建 development image，并可选验证交叉 SDK
 
 ```bash
 ./scripts/seeed/build.sh image --image seeed-image-jetson-development
+# Optional: only for x86_64 host cross-compilation
 ./scripts/seeed/build.sh sdk --image seeed-image-jetson-development
 ```
 

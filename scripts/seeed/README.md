@@ -19,6 +19,7 @@ commands.
 ./scripts/seeed/build.sh image
 ./scripts/seeed/build.sh image --image seeed-image-jetson-runtime
 ./scripts/seeed/build.sh image --image seeed-image-jetson-development
+# Optional: only for x86_64 host cross-compilation
 ./scripts/seeed/build.sh sdk --image seeed-image-jetson-development
 ./scripts/seeed/prepare-flash.sh
 ./scripts/seeed/validate-all-machines.sh
@@ -49,8 +50,10 @@ commands print the SDK deployment directory and generated installers.
 `seeed-image-jetson-runtime` for the matching Seeed runtime profile, or
 `seeed-image-jetson-development` when the target must include `nvcc`, NVIDIA
 development headers, build tools, samples, and tests. Running `build.sh sdk`
-for the development image produces CUDA host tools plus its matching AArch64
-development sysroot.
+for the development image is optional and only needed for x86_64 host
+cross-compilation; it produces CUDA host tools plus its matching AArch64
+development sysroot. It is not needed to flash the image or compile directly
+on the Jetson.
 
 `build.sh current` prints both the carrier `MACHINE` and the selected module SKU.
 `prepare-flash.sh` verifies that the tegraflash archive carries the same SKU

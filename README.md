@@ -95,8 +95,10 @@ Route B now provides two Seeed images:
   test package selections without installing the target compiler toolchain.
 - `seeed-image-jetson-development` adds `cuda-toolkit`, target-side `nvcc`,
   CUDA/cuDNN/TensorRT/VPI/OpenCV development files, build/debug tools, samples,
-  and tests. Its `populate_sdk` output also contains CUDA host tools and the
-  matching AArch64 development sysroot.
+  and tests. **Optional:** run `populate_sdk` only when an x86_64 host must
+  cross-compile applications; it produces CUDA host tools and the matching
+  AArch64 development sysroot. It is not required for on-device development or
+  flashing.
 
 These remain Yocto/OE4T images, not Ubuntu JetPack SDK Manager root filesystems.
 See the [reference audit](layers/meta-seeed/docs/nvidia-demo-image-full-reference.md)
