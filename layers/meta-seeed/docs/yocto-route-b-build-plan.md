@@ -27,6 +27,8 @@ Seeed runtime/development/production images
 > tests packagegroups，以及 `seeed-image-jetson-runtime` 和
 > `seeed-image-jetson-development` 已实现。`demo-image-full` 继续作为未修改的
 > NVIDIA/OE4T 参考基线；production image、全载板构建矩阵和正式发布流程仍待完成。
+> 已执行的构建结果、产物和剩余任务见
+> [`yocto-route-b-progress.md`](yocto-route-b-progress.md)。
 
 ## 2. 参考输入及使用边界
 
@@ -545,9 +547,11 @@ production image 在安全、账号、升级和产品应用策略确认后加入
 - [x] 新增 runtime、containers、development、tests packagegroups。
 - [x] 新增 runtime 和 development image recipes。
 - [x] 为新 image 补充 SDK host/target task。
-- [ ] 扩展构建脚本的 image/SDK/发布产物检查。
+- [x] 让构建脚本打印 image/SDK 产物路径。
+- [ ] 补齐发布产物完整性检查。
 - [ ] 在 `recomputer-orin-super-j401` 完成 runtime 构建。
-- [ ] 在 `recomputer-orin-super-j401` 完成 development 和 SDK 构建。
+- [x] 在 `recomputer-orin-super-j401` SKU `0000` 完成 development image 构建。
+- [ ] 可选：生成并验证 `recomputer-orin-super-j401` 交叉 SDK。
 - [ ] 在 AGX Orin 和 Thor 各选一个 machine 完成构建验证。
 - [ ] 全量解析和构建 16 个 Seeed machine。
 - [ ] 生成逐 machine tegraflash archive 完整性报告。

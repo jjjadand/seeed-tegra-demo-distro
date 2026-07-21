@@ -102,7 +102,10 @@ Route B now provides two Seeed images:
 
 These remain Yocto/OE4T images, not Ubuntu JetPack SDK Manager root filesystems.
 See the [reference audit](layers/meta-seeed/docs/nvidia-demo-image-full-reference.md)
-and [Route B document](layers/meta-seeed/docs/yocto-route-b-build-plan.md).
+and [Route B document](layers/meta-seeed/docs/yocto-route-b-build-plan.md). The
+[current progress record](layers/meta-seeed/docs/yocto-route-b-progress.md)
+lists completed builds, generated artifacts, validation evidence, and remaining
+hardware/SDK work.
 
 For the generic upstream tegrademo workflow, continue with:
 
